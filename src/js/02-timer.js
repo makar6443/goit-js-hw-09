@@ -1,88 +1,120 @@
+// Описан в документации
 import flatpickr from 'flatpickr';
-
+// Дополнительный импорт стилей
 import 'flatpickr/dist/flatpickr.min.css';
 
 import Notiflix from 'notiflix';
 
-const flatpickr = require("flatpickr");
+const btnStartRef = document.querySelector('[data-start]');
+const timerRef = document.querySelector('.timer');
+const fieldsRef = document.querySelectorAll('.field');
+const spanValuesRef = document.querySelectorAll('.value');
+const dataDays = document.querySelector('[data-days]');
+const dataHours = document.querySelector('[data-hours]');
+const dataMinutes = document.querySelector('[data-minutes]');
+const dataSeconds = document.querySelector('[data-seconds]');
+const spanLabelsRef = document.querySelectorAll('.label');
 
-let timerDeadline = null;
+let now = new Date();
+let selectedDate = now;
+let resultMs = 0;
+let timer;
+const TIMING = 1000;
+
+function resetTimer() {
+    now = new Date();
+
+    setAttributeDisabled(btnStartRef, true);
+
+    dataDays.textContent = '00';
+    dataHours.textContent = '00';
+    dataMinutes.textContent = '00';
+    dataSeconds.textContent = '00';
+
+    clearInterval(timer);
+}
+
+function setAttributeDisabled(element, disabled) {
+    disabled
+    ? element.setAttribute('disabled', true)
+    : element.removeAttribute('disabled');
+}
 
 const options = {
     enableTime: true,
     time_24hr: true,
     defaultDate: new Date(),
     minuteIncrement: 1,
-    onClose(selectedDates) {
-        console.log(selectedDates[0]);
-        timerDeadline = selectedDates[0].getTime();
-        console.log(timerDeadline);
-        if (timerDeadline < Date.now()) {
-            Notiflix.Notify.failure('Please choose a date in the future');
-            btnStartRef.setAttribute('disabled', true);
-        } else {
-            btnStartRef.toggleAttribute('disabled');
-        }
+
+    onOpen() {
+        resetTimer();
+    },
+    onChange(selectedDates, dateStr, instance) {
+        instance.selectedDateElem.addEventListener('dblclick', () => {
+        this.close();
+    });
+},
+
+onClose(selectedDates) {
+    now = new Date();
+    selectedDate = selectedDates[0];
+
+    if (selectedDate <= now) {
+      setAttributeDisabled(btnStartRef, true);
+      return Notiflix.Notify.failure('Please choose a date in the future');
+    }
+
+    setAttributeDisabled(btnStartRef, false);
+    resultMs = selectedDate - now;
     },
 };
 
+const calendar = flatpickr('#datetime-picker', options);
 
-flatpickr("#datetime-picker", options);
-
-const btnStartRef = document.querySelector('[data-start]');
-btnStartRef.setAttribute('disabled', false);
-btnStartRef.addEventListener('click', onBtnStart);
-
-function onBtnStart() {
-  timer.start();
+function addLeadingZero(valueStr) {
+    return valueStr.length > 2 ? valueStr : valueStr.padStart(2, '0');
 }
 
+function convertMs(ms) {
+    // Number of milliseconds per unit of time
+    const second = 1000;
+    const minute = second * 60;
+    const hour = minute * 60;
+    const day = hour * 24;
 
-const timerRef = document.querySelector('.timer');
-// console.log(timerRef);
+    // Remaining days
+    const days = Math.floor(ms / day);
+    // Remaining hours
+    const hours = Math.floor((ms % day) / hour);
+    // Remaining minutes
+    const minutes = Math.floor(((ms % day) % hour) / minute);
+    // Remaining seconds
+    const seconds = Math.floor((((ms % day) % hour) % minute) / second);
 
-const timer = {
-    intervalId: null,
-    refs: {},
-    start(rootSelector, deadline) {
-        this.getRefs(rootSelector);
-        this.intervalId = setInterval(() => {
-            const delta = timerDeadline - Date.now();
+    return { days, hours, minutes, seconds };
+}
 
-            if (delta <= 0) {
-                clearInterval(intervalId)
-            };
-            
-            const data = this.convertMs(delta);
-            // console.log(data);
-            this.refs.days.textContent = this.addLeadinZero(data.days);
-            this.refs.hours.textContent = this.addLeadinZero(data.hours);
-            this.refs.minutes.textContent = this.addLeadinZero(data.minutes);
-            this.refs.seconds.textContent = this.addLeadinZero(data.seconds);
-        }, 1000)
-    },
-    getRefs(rootSelector) {
-        this.refs.days = rootSelector.querySelector('[data-days]');
-        this.refs.hours = rootSelector.querySelector('[data-hours]');
-        this.refs.minutes = rootSelector.querySelector('[data-minutes]');
-        this.refs.seconds = rootSelector.querySelector('[data-seconds]');
-    },
+function startTimer() {
+    const dataObj = convertMs(resultMs);
 
-    convertMs(delta) {
-        // Remaining days
-        const days = Math.floor(delta / 1000 / 60 / 60 / 24);
-        // Remaining hours
-        const hours = Math.floor(delta / 1000 / 60 / 60) % 24;
-        // Remaining minutes
-        const minutes = Math.floor(delta / 1000 / 60) % 60;
-        // Remaining seconds
-        const seconds = Math.floor(delta / 1000) % 60;
-        
-        return { days, hours, minutes, seconds };
-    },
-    addLeadinZero(value) {
-        return String(value).padStart(2, '0');
+    if (resultMs <= 0) {
+        clearInterval(timer);
+        return Notiflix.Notify.failure('Please choose a date in the future');
     }
-};
 
-timer.start(timerRef, timerDeadline);
+    resultMs -= TIMING;
+
+    dataDays.textContent = addLeadingZero(String(dataObj.days));
+    dataHours.textContent = addLeadingZero(String(dataObj.hours));
+    dataMinutes.textContent = addLeadingZero(String(dataObj.minutes));
+    dataSeconds.textContent = addLeadingZero(String(dataObj.seconds));
+}
+
+window.addEventListener('load', () => {
+    resetTimer();
+});
+
+btnStartRef.addEventListener('click', () => {
+    setAttributeDisabled(btnStartRef, true);
+    timer = setInterval(startTimer, TIMING);
+});
